@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   Upload, FileVideo, Loader2, CheckCircle2, Circle, 
-  Zap, Download, Settings, Film, AlertCircle, Terminal
+  Zap, Download, Settings, Film, AlertCircle, Terminal, Trash2
 } from "lucide-react";
 
 type ProcessingStep = "upload" | "analysis" | "rendering" | "done";
@@ -20,10 +20,23 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    // GANTI KEY LOCALSTORAGE JADI 'AGENCLIP'
+    // 1. LOAD API URL
     const savedUrl = localStorage.getItem("AGENCLIP_API_URL");
     if (savedUrl) setApiUrl(savedUrl);
     else setIsSettingsOpen(true);
+
+    // 2. LOAD LAST RESULT (Agar tidak upload ulang saat refresh)
+    const lastResult = localStorage.getItem("AGENCLIP_LAST_RESULT");
+    if (lastResult) {
+        try {
+            const parsed = JSON.parse(lastResult);
+            setVideoUrl(parsed.url);
+            setClipTitle(parsed.title);
+            setStatus("completed"); // Langsung lompat ke hasil
+        } catch (e) {
+            localStorage.removeItem("AGENCLIP_LAST_RESULT");
+        }
+    }
   }, []);
 
   const saveApiUrl = (url: string) => {
@@ -31,6 +44,15 @@ export default function Home() {
     setApiUrl(cleanUrl);
     localStorage.setItem("AGENCLIP_API_URL", cleanUrl);
     setIsSettingsOpen(false);
+  };
+
+  // FUNGSI RESET (NEW TASK)
+  const resetApp = () => {
+      localStorage.removeItem("AGENCLIP_LAST_RESULT"); // Hapus memori
+      setFile(null);
+      setVideoUrl("");
+      setProgress(0);
+      setStatus("idle");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +96,11 @@ export default function Home() {
           else if (data.status === "completed") {
             clearInterval(interval);
             setProgress(100);
+            
+            // SIMPAN HASIL KE MEMORI
+            const resultData = { url: data.result_url, title: data.title || "AgenClip Result" };
+            localStorage.setItem("AGENCLIP_LAST_RESULT", JSON.stringify(resultData));
+
             setTimeout(() => {
                 setStatus("completed");
                 setVideoUrl(data.result_url);
@@ -118,6 +145,10 @@ export default function Home() {
                     onChange={(e) => setApiUrl(e.target.value)}
                 />
                 <button onClick={() => saveApiUrl(apiUrl)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition uppercase tracking-wide text-xs">Activate Engine</button>
+                {/* Tombol Cancel jika sudah ada URL */}
+                {localStorage.getItem("AGENCLIP_API_URL") && (
+                   <button onClick={() => setIsSettingsOpen(false)} className="w-full mt-3 text-zinc-500 hover:text-white text-xs">Cancel</button>
+                )}
             </div>
         </div>
       )}
@@ -125,7 +156,7 @@ export default function Home() {
       {/* NAVBAR */}
       <header className="fixed top-0 w-full z-40 border-b border-white/5 bg-[#050505]/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.reload()}>
                 <div className="w-8 h-8 bg-emerald-600 rounded flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]">
                     <Zap className="w-5 h-5 fill-current" />
                 </div>
@@ -213,7 +244,10 @@ export default function Home() {
             <div className="w-full max-w-4xl animate-in slide-in-from-bottom-10 duration-500">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-white flex items-center gap-2"><Film className="w-5 h-5 text-emerald-500" /> MISSION COMPLETE</h2>
-                    <button onClick={() => window.location.reload()} className="text-xs text-zinc-500 hover:text-white transition uppercase font-bold tracking-wider">New Task</button>
+                    {/* TOMBOL RESET BARU: Menghapus data memori */}
+                    <button onClick={resetApp} className="text-xs text-red-500 hover:text-red-400 transition uppercase font-bold tracking-wider flex items-center gap-1">
+                        <Trash2 className="w-3 h-3" /> Clear & New Task
+                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -256,7 +290,7 @@ export default function Home() {
                 <div>
                     <h3 className="font-bold text-red-400 text-sm uppercase tracking-wide">System Error</h3>
                     <p className="text-xs text-red-400/70">Agent disconnected. Check Colab/Ngrok.</p>
-                    <button onClick={() => window.location.reload()} className="mt-2 text-xs text-white underline">Reboot</button>
+                    <button onClick={resetApp} className="mt-2 text-xs text-white underline">Reboot</button>
                 </div>
             </div>
         )}
