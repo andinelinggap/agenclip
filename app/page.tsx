@@ -2,43 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { 
-  UploadCloud, FileVideo, Loader2, CheckCircle2, Circle, 
-  Sparkles, Download, Settings, Link as LinkIcon
+  Upload, FileVideo, Loader2, CheckCircle2, Circle, 
+  Zap, Download, Settings, Film, AlertCircle, Terminal
 } from "lucide-react";
 
-type ProcessingStep = "upload" | "analysis" | "crop" | "subtitle" | "done";
+type ProcessingStep = "upload" | "analysis" | "rendering" | "done";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "processing" | "completed" | "failed">("idle");
-  const [currentStep, setCurrentStep] = useState<ProcessingStep>("upload");
   const [progress, setProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [clipTitle, setClipTitle] = useState("AgenClip Result");
   
-  // === 1. STATE BARU: UNTUK URL NGROK ===
+  // Settings State
   const [apiUrl, setApiUrl] = useState(""); 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Data dummy (sama seperti kodemu)
-  const [clipData, setClipData] = useState({
-    title: "Rahasia Sukses 2025 🚀",
-    desc: "Ternyata ini alasan kenapa kita sering burnout. Relate banget ga sih? 😳",
-    score: 92,
-    tags: ["#motivasi", "#genz", "#selfimprovement"]
-  });
-
-  // Load URL saat pertama buka
   useEffect(() => {
-    const savedUrl = localStorage.getItem("ARVISTAR_API_URL");
+    // GANTI KEY LOCALSTORAGE JADI 'AGENCLIP'
+    const savedUrl = localStorage.getItem("AGENCLIP_API_URL");
     if (savedUrl) setApiUrl(savedUrl);
-    else setIsSettingsOpen(true); // Paksa buka settings jika belum ada URL
+    else setIsSettingsOpen(true);
   }, []);
 
   const saveApiUrl = (url: string) => {
-    const cleanUrl = url.replace(/\/$/, ""); // Hapus slash di akhir
+    const cleanUrl = url.replace(/\/$/, ""); 
     setApiUrl(cleanUrl);
-    localStorage.setItem("ARVISTAR_API_URL", cleanUrl);
+    localStorage.setItem("AGENCLIP_API_URL", cleanUrl);
     setIsSettingsOpen(false);
   };
 
@@ -48,240 +39,238 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return;
-    
-    // Cek apakah URL Ngrok sudah diisi
-    if (!apiUrl) { 
-        alert("Masukkan URL Backend Ngrok dulu di menu Settings!"); 
-        setIsSettingsOpen(true); 
-        return; 
-    }
+    if (!file || !apiUrl) { setIsSettingsOpen(true); return; }
 
     setStatus("processing");
-    setProgress(10);
-    setCurrentStep("upload");
+    setProgress(5);
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      // === 2. GANTI URL LOCALHOST DENGAN API URL ===
+      // 1. UPLOAD
       const res = await fetch(`${apiUrl}/upload`, {
         method: "POST",
+        headers: { "ngrok-skip-browser-warning": "true" },
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Gagal connect. Cek URL Ngrok!");
+      if (!res.ok) throw new Error("Connection failed. Check AgenClip Backend.");
       
-      const data = await res.json();
-      const jobId = data.job_id;
-      
-      setCurrentStep("analysis");
-      setProgress(30);
+      const { job_id } = await res.json();
+      setProgress(20);
 
+      // 2. POLLING
       const interval = setInterval(async () => {
         try {
-          // === 3. GANTI URL POLLING JUGA ===
-          const statusRes = await fetch(`${apiUrl}/status/${jobId}`);
-          const statusData = await statusRes.json();
+          const statusRes = await fetch(`${apiUrl}/status/${job_id}`, {
+             headers: { "ngrok-skip-browser-warning": "true" }
+          });
+          const data = await statusRes.json();
 
-          if (statusData.status === "transcribing") {
-             setCurrentStep("analysis");
-             setProgress((prev) => (prev < 60 ? prev + 1 : prev));
-          } else if (statusData.status === "analyzing") {
-             setCurrentStep("crop"); 
-             setProgress((prev) => (prev < 80 ? prev + 5 : prev));
-          } else if (statusData.status === "rendering") {
-             setCurrentStep("subtitle");
-             setProgress((prev) => (prev < 95 ? prev + 2 : prev));
-          }
-
-          if (statusData.status === "completed") {
+          if (data.status === "transcribing") setProgress(40);
+          else if (data.status === "analyzing") setProgress(60);
+          else if (data.status === "rendering") setProgress(85);
+          else if (data.status === "completed") {
             clearInterval(interval);
             setProgress(100);
-            setCurrentStep("done");
-            
             setTimeout(() => {
                 setStatus("completed");
-                setVideoUrl(statusData.result_url);
-                if(statusData.clip_title) {
-                    setClipData(prev => ({...prev, title: statusData.clip_title}));
-                }
-            }, 800);
-            
-          } else if (statusData.status === "failed") {
+                setVideoUrl(data.result_url);
+                if(data.title) setClipTitle(data.title);
+            }, 500);
+          } else if (data.status === "failed") {
             clearInterval(interval);
             setStatus("failed");
-            setErrorMsg(statusData.error || "Error sistem");
           }
-        } catch (err) {
-          console.error("Polling error", err);
-        }
+        } catch (err) { console.error(err); }
       }, 2000);
 
-    } catch (err: any) {
+    } catch (err) {
       setStatus("failed");
-      setErrorMsg(err.message + ". Pastikan Colab jalan & URL benar.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-cyan-500 selection:text-black relative">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-emerald-500/30">
       
-      {/* === 4. MODAL SETTINGS BARU (Untuk Input URL Ngrok) === */}
+      {/* BACKGROUND GRID */}
+      <div className="fixed inset-0 z-0 opacity-10 pointer-events-none" 
+           style={{ 
+               backgroundImage: 'linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px)', 
+               backgroundSize: '40px 40px' 
+           }}>
+      </div>
+
+      {/* SETTINGS MODAL */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-[#1a1a1a] p-6 rounded-2xl w-full max-w-md border border-slate-700 shadow-2xl animate-in zoom-in-95">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <LinkIcon className="w-5 h-5 text-cyan-400" /> Connect Backend
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-[#111] border border-zinc-800 p-6 rounded-xl w-full max-w-md shadow-2xl">
+                <h3 className="text-lg font-bold mb-2 text-emerald-400 flex items-center gap-2">
+                    <Terminal className="w-5 h-5" /> Connect Agent
                 </h3>
-                <p className="text-slate-400 text-sm mb-4">
-                    Paste URL Ngrok dari Google Colab di sini (contoh: https://xxxx.ngrok-free.app).
-                </p>
+                <p className="text-zinc-400 text-sm mb-4">Paste URL Ngrok dari Colab untuk mengaktifkan AgenClip Engine.</p>
                 <input 
                     type="text" 
-                    placeholder="https://xxxx-xxxx.ngrok-free.app"
-                    className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none mb-4"
+                    placeholder="https://xxxx.ngrok-free.app"
+                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-emerald-500 outline-none mb-4 font-mono text-sm"
                     defaultValue={apiUrl}
                     onChange={(e) => setApiUrl(e.target.value)}
                 />
-                <button 
-                    onClick={() => saveApiUrl(apiUrl)}
-                    className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg transition"
-                >
-                    Simpan & Connect
-                </button>
-                {/* Tombol Close jika sudah ada URL */}
-                {localStorage.getItem("ARVISTAR_API_URL") && (
-                   <button onClick={() => setIsSettingsOpen(false)} className="w-full mt-2 text-slate-500 hover:text-white text-sm">Cancel</button>
-                )}
+                <button onClick={() => saveApiUrl(apiUrl)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition uppercase tracking-wide text-xs">Activate Engine</button>
             </div>
         </div>
       )}
 
-      {/* HEADER */}
-      <header className="fixed top-0 w-full z-40 flex items-center justify-between px-6 py-4 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/10">
-        <div className="flex items-center gap-2">
-           <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-lg flex items-center justify-center">
-             <Sparkles className="w-5 h-5 text-white" />
-           </div>
-           <span className="text-lg font-bold tracking-tight">AI Clip Studio <span className="text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 font-normal ml-1">BETA</span></span>
+      {/* NAVBAR */}
+      <header className="fixed top-0 w-full z-40 border-b border-white/5 bg-[#050505]/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-600 rounded flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                    <Zap className="w-5 h-5 fill-current" />
+                </div>
+                <span className="font-bold text-xl tracking-tighter">AGEN<span className="text-emerald-500">CLIP</span></span>
+            </div>
+            <button onClick={() => setIsSettingsOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-zinc-800 transition">
+                <div className={`w-2 h-2 rounded-full ${apiUrl ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                <span className="text-xs font-mono text-zinc-400">{apiUrl ? 'SYSTEM ONLINE' : 'OFFLINE'}</span>
+                <Settings className="w-3 h-3 text-zinc-500 ml-1" />
+            </button>
         </div>
-        
-        {/* Tombol Settings Status */}
-        <button 
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-full text-sm font-medium transition"
-        >
-            <div className={`w-2 h-2 rounded-full ${apiUrl ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            {apiUrl ? 'Connected' : 'No Server'}
-            <Settings className="w-4 h-4 ml-1" />
-        </button>
       </header>
 
-      {/* ... SISANYA SAMA PERSIS DENGAN KODE UI KAMU (Main, Processing, Result) ... */}
-      <main className="pt-24 pb-12 px-4 md:px-8 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[85vh]">
+      {/* MAIN CONTENT */}
+      <main className="relative z-10 pt-32 pb-12 px-4 flex flex-col items-center justify-center min-h-[90vh]">
         
-        {/* STATE 1: IDLE */}
+        {/* === IDLE STATE === */}
         {status === "idle" && (
-          <div className="w-full max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-700">
-             <div className="text-center mb-10 space-y-2">
-                <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400">
-                  Satu Klik. Langsung Viral.
+          <div className="w-full max-w-xl text-center animate-in slide-in-from-bottom-5 fade-in duration-700">
+             <div className="mb-12">
+                <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-4">
+                   DEPLOY YOUR <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">AI AGENT</span>
                 </h1>
-                <p className="text-slate-400 text-lg">Upload video panjang. AI potong jadi Shorts + Subtitles.</p>
+                <p className="text-zinc-500 text-lg">AgenClip memotong video panjang jadi viral shorts. Otomatis.</p>
              </div>
 
-             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="relative group cursor-pointer">
-                  <input type="file" accept="video/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                  <div className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center transition-all duration-300 ${file ? "border-cyan-500/50 bg-cyan-950/10" : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900"}`}>
+             <form onSubmit={handleSubmit} className="relative group">
+                <input type="file" accept="video/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer" />
+                
+                <div className={`border border-dashed rounded-xl p-12 transition-all duration-300 flex flex-col items-center justify-center relative overflow-hidden
+                    ${file ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/60'}`}>
+                    
                     {file ? (
-                      <>
-                        <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-4 text-cyan-400"><FileVideo className="w-8 h-8" /></div>
-                        <p className="text-lg font-medium text-cyan-100">{file.name}</p>
-                      </>
+                        <div className="text-emerald-400 flex flex-col items-center animate-in zoom-in relative z-10">
+                            <FileVideo className="w-12 h-12 mb-3" />
+                            <p className="font-bold text-lg text-white">{file.name}</p>
+                            <p className="text-xs text-emerald-500/70 font-mono mt-1">Ready to deploy</p>
+                        </div>
                     ) : (
-                      <>
-                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 text-slate-400 group-hover:scale-110 transition"><UploadCloud className="w-8 h-8" /></div>
-                        <p className="text-lg font-medium text-slate-200">Click to upload or drag & drop</p>
-                      </>
+                        <div className="text-zinc-500 flex flex-col items-center relative z-10">
+                            <Upload className="w-10 h-10 mb-3 group-hover:-translate-y-1 transition duration-300" />
+                            <p className="font-medium text-zinc-300">Drop Video File</p>
+                            <p className="text-xs mt-1">MP4 / MOV</p>
+                        </div>
                     )}
-                  </div>
                 </div>
-                <button type="submit" disabled={!file} className="w-full py-4 rounded-xl font-bold text-lg transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20">
-                  Generate Viral Clips ✨
+
+                <button disabled={!file} className="mt-6 w-full py-4 bg-white text-black rounded-xl font-bold text-lg hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide">
+                    Run Agent
                 </button>
              </form>
           </div>
         )}
 
-        {/* STATE 2: PROCESSING */}
+        {/* === PROCESSING STATE === */}
         {status === "processing" && (
-          <div className="w-full max-w-lg bg-[#111] border border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-500">
-             <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 shrink-0"><FileVideo className="w-6 h-6" /></div>
-                <div className="overflow-hidden"><h3 className="font-semibold text-slate-200 truncate">{file?.name || "Video.mp4"}</h3></div>
-             </div>
-             <div className="mb-8">
-                <div className="flex justify-between text-sm mb-2 font-medium"><span className="text-cyan-400 animate-pulse">AI Analysis...</span><span className="text-slate-400">{progress}%</span></div>
-                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-cyan-400 to-pink-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
-             </div>
-             <div className="space-y-4">
-                <StepItem label="Upload to Secure Storage" status={currentStep === "upload" ? "current" : "completed"} />
-                <StepItem label="Gemini Analysis (Indonesian Context)" status={currentStep === "upload" ? "waiting" : (currentStep === "analysis" ? "current" : "completed")} />
-                <StepItem label="Smart Crop & Subtitles" status={["upload", "analysis"].includes(currentStep) ? "waiting" : (currentStep === "crop" || currentStep === "subtitle" ? "current" : "completed")} />
-             </div>
-          </div>
+            <div className="w-full max-w-md bg-[#111] border border-zinc-800 rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white text-sm">AGENT WORKING...</h3>
+                            <p className="text-xs text-zinc-500 font-mono">Progress: {progress}%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden mb-8">
+                    <div className="h-full bg-emerald-500 transition-all duration-700 ease-out shadow-[0_0_10px_#10b981]" style={{ width: `${progress}%` }}></div>
+                </div>
+
+                <div className="space-y-4">
+                    <StepItem label="Upload to Cloud" done={progress > 10} />
+                    <StepItem label="Transcribing Audio" done={progress > 30} />
+                    <StepItem label="Viral Context Analysis" done={progress > 50} />
+                    <StepItem label="Final Rendering" done={progress > 80} />
+                </div>
+            </div>
         )}
 
-        {/* STATE 3: RESULT */}
+        {/* === RESULT STATE === */}
         {status === "completed" && videoUrl && (
-          <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-700">
-             <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-bold">Result Clips</h2>
-                <button onClick={() => window.location.reload()} className="text-sm text-slate-400 hover:text-white transition">Upload New</button>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <ResultCard videoUrl={videoUrl} score={clipData.score} title={clipData.title} desc={clipData.desc} tags={clipData.tags} duration="30s" />
-                <ResultCard videoUrl={videoUrl} score={88} title="Jangan Nyerah Dulu! 💪" desc="Buat lo yang lagi capek berjuang." tags={["#semangat"]} duration="40s" isDemo={true} />
-                <ResultCard videoUrl={videoUrl} score={95} title="Mindset Orang Kaya 🤑" desc="Cara atur duit biar ga boncos." tags={["#keuangan"]} duration="35s" isDemo={true} />
-             </div>
-          </div>
+            <div className="w-full max-w-4xl animate-in slide-in-from-bottom-10 duration-500">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><Film className="w-5 h-5 text-emerald-500" /> MISSION COMPLETE</h2>
+                    <button onClick={() => window.location.reload()} className="text-xs text-zinc-500 hover:text-white transition uppercase font-bold tracking-wider">New Task</button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* RESULT CARD */}
+                    <div className="bg-[#111] border border-emerald-500/30 rounded-xl overflow-hidden hover:border-emerald-500 transition duration-300 group shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+                        <div className="relative aspect-[9/16] bg-black">
+                            <video src={videoUrl} controls className="w-full h-full object-contain" />
+                            <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[9px] font-black px-2 py-1 rounded shadow uppercase tracking-wider">Viral Pick</div>
+                        </div>
+                        <div className="p-5">
+                            <h3 className="font-bold text-md mb-2 leading-tight text-white">{clipTitle}</h3>
+                            <p className="text-zinc-500 text-[10px] mb-4 uppercase tracking-widest">AI Generated • 720p</p>
+                            <a href={videoUrl} download className="flex items-center justify-center gap-2 w-full bg-white text-black font-bold py-3 rounded hover:bg-zinc-200 transition text-sm uppercase">
+                                <Download className="w-4 h-4" /> Download
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* DUMMY CARDS */}
+                    {[1, 2].map((i) => (
+                        <div key={i} className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-hidden opacity-40 grayscale">
+                            <div className="aspect-[9/16] bg-zinc-800/50 flex items-center justify-center">
+                                <Terminal className="w-8 h-8 text-zinc-700" />
+                            </div>
+                            <div className="p-5">
+                                <h3 className="font-bold text-md mb-2 text-zinc-600">Pending Task #{i}</h3>
+                                <div className="h-8 bg-zinc-800/50 rounded mb-2 w-full"></div>
+                                <div className="h-8 bg-zinc-800/50 rounded w-full"></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
         )}
+        
+        {/* FAILED STATE */}
+        {status === "failed" && (
+            <div className="bg-red-950/20 border border-red-900/50 p-6 rounded-xl flex items-center gap-4 max-w-md backdrop-blur-md">
+                <AlertCircle className="w-8 h-8 text-red-500 shrink-0" />
+                <div>
+                    <h3 className="font-bold text-red-400 text-sm uppercase tracking-wide">System Error</h3>
+                    <p className="text-xs text-red-400/70">Agent disconnected. Check Colab/Ngrok.</p>
+                    <button onClick={() => window.location.reload()} className="mt-2 text-xs text-white underline">Reboot</button>
+                </div>
+            </div>
+        )}
+
       </main>
     </div>
   );
 }
 
-// SUB COMPONENTS (SAMA SEPERTI SEBELUMNYA)
-function StepItem({ label, status }: { label: string, status: "waiting" | "current" | "completed" }) {
+function StepItem({ label, done }: { label: string, done: boolean }) {
     return (
-        <div className="flex items-center gap-3">
-            {status === "completed" ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> : status === "current" ? <Loader2 className="w-5 h-5 text-cyan-400 animate-spin shrink-0" /> : <Circle className="w-5 h-5 text-slate-700 shrink-0" />}
-            <span className={`text-sm ${status === "waiting" ? "text-slate-600" : "text-slate-300"}`}>{label}</span>
-        </div>
-    )
-}
-
-function ResultCard({ videoUrl, score, title, desc, tags, duration, isDemo = false }: any) {
-    return (
-        <div className={`bg-[#161616] rounded-xl overflow-hidden border border-slate-800 flex flex-col group ${isDemo ? 'opacity-50 hover:opacity-100 transition-opacity' : ''}`}>
-           <div className="relative aspect-[9/16] bg-black">
-              <video src={videoUrl} controls className="w-full h-full object-contain" poster="/placeholder.png" />
-              <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none">
-                  <div className="bg-[#2a1a1a]/90 backdrop-blur border border-red-900/30 px-2 py-1 rounded text-[10px] font-bold text-red-400 uppercase tracking-wide">Viral Score: {score}</div>
-                  <div className="bg-black/60 px-2 py-1 rounded text-xs text-white">{duration}</div>
-              </div>
-           </div>
-           <div className="p-4 flex flex-col flex-1">
-              <h3 className="font-bold text-slate-100 text-lg mb-2 leading-tight">{title}</h3>
-              <p className="text-slate-400 text-xs mb-4 line-clamp-2">{desc}</p>
-              <div className="flex flex-wrap gap-2 mb-6">{tags.map((tag: string, i: number) => (<span key={i} className="px-2 py-1 bg-slate-800 text-cyan-400 text-[10px] rounded font-medium">{tag}</span>))}</div>
-              <div className="mt-auto">
-                 <a href={videoUrl} download className="flex items-center justify-center gap-2 w-full bg-white hover:bg-slate-200 text-black font-bold py-3 rounded-lg text-sm transition-colors"><Download className="w-4 h-4" /> Download HD</a>
-              </div>
-           </div>
+        <div className={`flex items-center gap-3 transition-colors ${done ? 'text-emerald-400' : 'text-zinc-600'}`}>
+            {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+            <span className="text-xs font-bold uppercase tracking-wide">{label}</span>
         </div>
     )
 }
