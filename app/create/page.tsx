@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // === PIN RAHASIA ===
-const ADMIN_PIN = "123456"; 
+const ADMIN_PIN = "112244"; 
 
 interface VideoFile {
   filename: string;
