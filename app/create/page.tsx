@@ -227,6 +227,31 @@ function AdminDashboard({ theme, toggleTheme, onLogout }: { theme: string, toggl
       } catch (err) { setStatus("failed"); }
   };
 
+  const handleDelete = async (filename: string) => {
+      if (!confirm(`Yakin ingin menghapus file "${filename}" dari Google Drive?`)) return;
+      if (!apiUrl) return;
+
+      try {
+          const res = await fetch(`${apiUrl}/delete_file`, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json", 
+                "ngrok-skip-browser-warning": "true" 
+            },
+            body: JSON.stringify({ filename }),
+          });
+
+          if (res.ok) {
+              setLibraryFiles((prev) => prev.filter((f) => f.filename !== filename));
+          } else {
+              alert("Gagal menghapus file.");
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Terjadi kesalahan koneksi.");
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !apiUrl) { setIsSettingsOpen(true); return; }
@@ -355,28 +380,48 @@ function AdminDashboard({ theme, toggleTheme, onLogout }: { theme: string, toggl
         )}
 
         {/* LIBRARY VIEW */}
-        {status === "idle" && activeTab === "library" && (
-            <div className="w-full max-w-4xl">
-                {isLoadingLib ? (
-                    <div className="flex flex-col items-center justify-center py-20"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mb-4" /><p className="text-sm opacity-50">Syncing with GDrive...</p></div>
-                ) : libraryFiles.length === 0 ? (
-                    <div className="text-center py-20 opacity-50"><Cloud className="w-12 h-12 mx-auto mb-4" /><p>No videos found in Drive.</p></div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {libraryFiles.map((vid, idx) => (
-                            <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-colors
-                                ${theme === 'dark' ? 'bg-[#0f0f0f] border-zinc-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                    <div className="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 shrink-0"><FileVideo className="w-5 h-5" /></div>
-                                    <div className="min-w-0"><h4 className="font-bold text-sm truncate">{vid.filename}</h4><p className="text-xs opacity-50">{vid.uploadDate}</p></div>
-                                </div>
-                                <button onClick={() => handleReprocess(vid.filename)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition" title="Reprocess AI"><RefreshCw className="w-4 h-4" /></button>
-                            </div>
-                        ))}
+{status === "idle" && activeTab === "library" && (
+    <div className="w-full max-w-4xl">
+        {isLoadingLib ? (
+            <div className="flex flex-col items-center justify-center py-20"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin mb-4" /><p className="text-sm opacity-50">Syncing with GDrive...</p></div>
+        ) : libraryFiles.length === 0 ? (
+            <div className="text-center py-20 opacity-50"><Cloud className="w-12 h-12 mx-auto mb-4" /><p>No videos found in Drive.</p></div>
+        ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {libraryFiles.map((vid, idx) => (
+                    <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between transition-colors
+                        ${theme === 'dark' ? 'bg-[#0f0f0f] border-zinc-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-500 shrink-0"><FileVideo className="w-5 h-5" /></div>
+                            <div className="min-w-0"><h4 className="font-bold text-sm truncate">{vid.filename}</h4><p className="text-xs opacity-50">{vid.uploadDate}</p></div>
+                        </div>
+                        
+                        {/* --- UPDATE: DUA TOMBOL (REPROCESS & DELETE) --- */}
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => handleReprocess(vid.filename)} 
+                                className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition" 
+                                title="Reprocess AI"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                            
+                            <button 
+                                onClick={() => handleDelete(vid.filename)} 
+                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition" 
+                                title="Hapus dari Drive"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {/* ----------------------------------------------- */}
+
                     </div>
-                )}
+                ))}
             </div>
         )}
+    </div>
+)}
 
         {/* PROCESSING & COMPLETED VIEW */}
         {status === "processing" && (
@@ -388,27 +433,74 @@ function AdminDashboard({ theme, toggleTheme, onLogout }: { theme: string, toggl
         )}
 
         {status === "completed" && (
-            <div className="w-full max-w-6xl animate-in slide-in-from-bottom-10 duration-500">
-                <div className={`flex items-center justify-between mb-8 border-b pb-6 ${theme === 'dark' ? 'border-white/5' : 'border-slate-200'}`}>
-                    <div><h2 className="text-2xl font-bold flex items-center gap-2"><CheckCircle2 className="w-6 h-6 text-emerald-500" /> GENERATION COMPLETE</h2><p className={`text-sm mt-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-slate-500'}`}>{results.length} Viral Clips Created</p></div>
-                    <button onClick={resetApp} className={`px-4 py-2 border rounded-lg text-xs hover:bg-opacity-80 transition uppercase font-bold flex items-center gap-2 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-red-400' : 'bg-white border-slate-300 text-red-600'}`}><Trash2 className="w-3 h-3" /> Reset</button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {results.map((clip, idx) => (
-                        <div key={idx} className={`border rounded-2xl overflow-hidden hover:border-emerald-500/50 transition group flex flex-col ${theme === 'dark' ? 'bg-[#0f0f0f] border-zinc-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="relative aspect-[9/16] bg-black">
-                                <video src={clip.url} controls className="w-full h-full object-contain" />
-                                <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[9px] font-black px-2 py-1 rounded shadow uppercase tracking-wider">Score: {clip.score}</div>
-                            </div>
-                            <div className="p-5 flex-1 flex flex-col">
-                                <h3 className="font-bold text-lg mb-2 leading-tight line-clamp-2">{clip.title}</h3>
-                                <a href={clip.url} download className={`mt-auto flex items-center justify-center gap-2 w-full font-bold py-3 rounded-xl transition text-sm uppercase ${theme === 'dark' ? 'bg-white text-black hover:bg-zinc-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}><Download className="w-4 h-4" /> Download</a>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+    <div className="w-full max-w-6xl animate-in slide-in-from-bottom-10 duration-500">
+        <div className={`flex items-center justify-between mb-8 border-b pb-6 ${theme === 'dark' ? 'border-white/5' : 'border-slate-200'}`}>
+            <div>
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-500" /> GENERATION COMPLETE
+                </h2>
+                <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-slate-500'}`}>
+                    {results.length} Viral Clips Created
+                </p>
             </div>
-        )}
+            <button onClick={resetApp} className={`px-4 py-2 border rounded-lg text-xs hover:bg-opacity-80 transition uppercase font-bold flex items-center gap-2 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-red-400' : 'bg-white border-slate-300 text-red-600'}`}>
+                <Trash2 className="w-3 h-3" /> Reset
+            </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {results.map((clip, idx) => (
+                <div key={idx} className={`border rounded-2xl overflow-hidden hover:border-emerald-500/50 transition group flex flex-col ${theme === 'dark' ? 'bg-[#0f0f0f] border-zinc-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    
+                    {/* VIDEO PLAYER */}
+                    <div className="relative aspect-[9/16] bg-black">
+                        <video src={clip.url} controls className="w-full h-full object-contain" />
+                        
+                        {/* Score Badge */}
+                        <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[9px] font-black px-2 py-1 rounded shadow uppercase tracking-wider backdrop-blur-sm bg-opacity-90">
+                            Score: {clip.score ? clip.score : 'N/A'}
+                        </div>
+                    </div>
+
+                    {/* CONTENT DETAILS */}
+                    <div className="p-5 flex-1 flex flex-col">
+                        <h3 className="font-bold text-lg mb-3 leading-tight line-clamp-2">{clip.title}</h3>
+                        
+                        {/* --- NEW: CAPTION BOX --- */}
+                        <div className="relative mb-4 group/caption">
+                            <label className={`text-[10px] uppercase font-bold tracking-widest mb-1 block opacity-50 ${theme === 'dark' ? 'text-zinc-500' : 'text-slate-400'}`}>Caption & Tags</label>
+                            
+                            <div className={`rounded-lg p-3 text-xs font-mono h-24 overflow-y-auto border transition-colors
+                                ${theme === 'dark' ? 'bg-zinc-900/50 text-zinc-300 border-zinc-800' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                {clip.caption ? clip.caption : <span className="italic opacity-30">Generating caption...</span>}
+                            </div>
+
+                            {/* Tombol Copy (Muncul saat hover) */}
+                            {clip.caption && (
+                                <button 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(clip.caption);
+                                        // Optional: Bisa ganti icon jadi checklist sebentar
+                                        alert("Caption copied to clipboard!"); 
+                                    }}
+                                    className="absolute top-6 right-2 p-1.5 rounded-md bg-emerald-500 text-white opacity-0 group-hover/caption:opacity-100 transition-all hover:bg-emerald-400 shadow-lg hover:scale-105"
+                                    title="Copy Caption"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                            )}
+                        </div>
+                        {/* ------------------------- */}
+
+                        <a href={clip.url} download className={`mt-auto flex items-center justify-center gap-2 w-full font-bold py-3 rounded-xl transition text-sm uppercase ${theme === 'dark' ? 'bg-white text-black hover:bg-zinc-200' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                            <Download className="w-4 h-4" /> Download Video
+                        </a>
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+)}
 
         {status === "failed" && (
             <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-2xl flex items-center gap-4 max-w-md">
