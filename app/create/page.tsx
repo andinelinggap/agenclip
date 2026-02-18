@@ -466,6 +466,11 @@ function AdminDashboard({ theme, toggleTheme, onLogout }: { theme: string, toggl
                     <div className="p-5 flex-1 flex flex-col">
                         <h3 className="font-bold text-lg mb-3 leading-tight line-clamp-2">{clip.title}</h3>
                         
+                        <div className="flex items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded w-fit">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                            {clip.sound ? clip.sound : 'Trending Audio'}
+                        </div>
+
                         {/* --- NEW: CAPTION BOX --- */}
                         <div className="relative mb-4 group/caption">
                             <label className={`text-[10px] uppercase font-bold tracking-widest mb-1 block opacity-50 ${theme === 'dark' ? 'text-zinc-500' : 'text-slate-400'}`}>Caption & Tags</label>
